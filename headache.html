@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>KIBOI JUNIOR SCHOOL - Multiuser</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #4af053;
+    }
+    h2 {
+      color: #9f06c2;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #0b4de6;
+      color: white;
+      margin-top: 20px;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 6px;
+      text-align: center;
+    }
+    th {
+      background: #b810de;
+    }
+    input, select {
+      padding: 6px;
+      width: 180px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 14px;
+      margin: 4px;
+      border: none;
+      border-radius: 4px;
+      background: #333;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #555;
+    }
+    #loginForm, #manageUsers, #learnerRegistration {
+      background: #fff;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    #mainContent {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="loginForm">
+  <h2>Login</h2>
+  <label>Username: <input type="text" id="username"></label><br><br>
+  <label>Password: <input type="password" id="password"></label><br><br>
+  <button onclick="login()">Login</button>
+  <p id="loginMessage" style="color:red;"></p>
+</div>
+
+<div id="mainContent">
+  <h2 id="welcomeUser">Welcome</h2>
+  <div id="teacherInfo" style="display:none;">
+    <h3>Your Assigned Classes and Subjects</h3>
+    <table id="teacherSubjectsTable">
+      <thead>
+        <tr><th>Class</th><th>Subjects</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div id="adminControls" style="display:none;">
+    <button onclick="clearAllRecords()">Clear All Records</button>
+    <button onclick="resetTeacherPassword()">Reset Teacher Password</button>
+  </div>
+
+  <div id="manageUsers" style="display:none;">
+    <h3>Register New Teacher</h3>
+    <form id="registerTeacherForm">
+      <label>Username: <input type="text" id="newTeacherUsername" required></label><br><br>
+      <label>Password: <input type="password" id="newTeacherPassword" required></label><br><br>
+      <label>Subjects (comma separated codes):<br>
+        <input type="text" id="newTeacherSubjects" placeholder="MAT,KIS" required>
+      </label><br><br>
+      <label>Grades Taught:<br>
+        <label><input type="checkbox" class="gradeCheckbox" value="GRADE 7"> GRADE 7</label>
+        <label><input type="checkbox" class="gradeCheckbox" value="GRADE 8"> GRADE 8</label>
+        <label><input type="checkbox" class="gradeCheckbox" value="GRADE 9"> GRADE 9</label>
+      </label><br><br>
+      <button type="submit">Register Teacher</button>
+    </form>
+  </div>
+
+  <div id="learnerRegistration" style="display:none;">
+    <h3>Register Learner</h3>
+    <form id="registerLearnerForm">
+      <label>Student Name: <input type="text" id="learnerName" required></label><br><br>
+      <label>Adm No: <input type="text" id="learnerAdmNo" required></label><br><br>
+      <label>Date of Birth: <input type="date" id="learnerDOB" required></label><br><br>
+      <label>Grade:
+        <select id="learnerGrade" required>
+          <option value="">Select Grade</option>
+          <option value="GRADE 7">GRADE 7</option>
+          <option value="GRADE 8">GRADE 8</option>
+          <option value="GRADE 9">GRADE 9</option>
+        </select>
+      </label><br><br>
+      <button type="submit">Save Learner</button>
+    </form>
+  </div>
+
+  <form id="examForm">
+    <h3>Add Student Result</h3>
+    <label>Student Name: <input type="text" id="studentName" required></label><br><br>
+    <label>Adm No: <input type="text" id="studentAdmNo" required></label><br><br>
+    <label>Date of Birth: <input type="date" id="studentDOB"></label><br><br>
+    <label>Grade:
+      <select id="studentGrade" required>
+        <option value="">Select Grade</option>
+        <option value="GRADE 7">GRADE 7</option>
+        <option value="GRADE 8">GRADE 8</option>
+        <option value="GRADE 9">GRADE 9</option>
+      </select>
+    </label><br><br>
+    <div id="subjectInputs"></div>
+    <button type="submit">Add Result</button>
+  </form>
+
+  <h3>Mark Sheet</h3>
+  <button onclick="exportPDF()">Export PDF</button>
+  <table id="markSheetTable">
+    <thead id="markSheetHead"></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+const defaultUsers = {
+  admin: { password: "1234", subjects: [] },
+  teacher: { password: "abcd", subjects: ["MAT","KIS"], grades: ["GRADE 7","GRADE 8"] }
+};
+function getUsers() { return JSON.parse(localStorage.getItem("users")) || defaultUsers; }
+function saveUsers(users) { localStorage.setItem("users", JSON.stringify(users)); }
+let currentUser = "";
+let students = [];
+
+function saveStudents() { localStorage.setItem("students", JSON.stringify(students)); }
+function loadStudents() {
+  const saved = JSON.parse(localStorage.getItem("students"));
+  if (saved) { students = saved; renderTable(); }
+}
+
+function login() {
+  const user = username.value.trim().toLowerCase();
+  const pass = password.value.trim();
+  const users = getUsers();
+  if (users[user] && users[user].password === pass) {
+    currentUser = user;
+    loginForm.style.display = "none";
+    mainContent.style.display = "block";
+    welcomeUser.textContent = `Welcome, ${user}`;
+    if (user === "admin") {
+      adminControls.style.display = "block";
+      manageUsers.style.display = "block";
+      learnerRegistration.style.display = "block";
+      createSubjectInputs(["MAT","KIS","SST","CRE","AGR","ENG","ISC","CAS","PTC"]);
+    } else {
+      const teacherSubjects = users[user].subjects || [];
+      const teacherGrades = users[user].grades || [];
+      teacherInfo.style.display = "block";
+      populateTeacherSubjectsTable(teacherGrades, teacherSubjects);
+      createSubjectInputs(teacherSubjects);
+      learnerRegistration.style.display = "none";
+      adminControls.style.display = "none";
+      manageUsers.style.display = "none";
+    }
+    buildTableHead();
+    loadStudents();
+  } else loginMessage.textContent = "Invalid credentials!";
+}
+
+function populateTeacherSubjectsTable(grades, subjects) {
+  const tbody = document.querySelector("#teacherSubjectsTable tbody");
+  tbody.innerHTML = "";
+  grades.forEach(grade => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${grade}</td><td>${subjects.join(", ")}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function createSubjectInputs(subjectList) {
+  const div = document.getElementById("subjectInputs");
+  div.innerHTML = "";
+  subjectList.forEach(subj => {
+    div.innerHTML += `
+      <label>${subj} Marks:
+        <input type="number" id="${subj}" min="0" max="100" required>
+      </label><br><br>`;
+  });
+}
+
+function buildTableHead() {
+  const head = document.getElementById("markSheetHead");
+  let subjectsToShow = currentUser === "admin" ?
+    ["MAT","KIS","SST","CRE","AGR","ENG","ISC","CAS","PTC"] :
+    getUsers()[currentUser].subjects || [];
+  const ths = `
+    <tr>
+      <th>Rank</th>
+      <th>Name</th>
+      <th>Adm No</th>
+      <th>Class</th>
+      ${subjectsToShow.map(subj => `<th>${subj}</th>`).join("")}
+      <th>Total</th>
+      <th>Average</th>
+      <th>Grade</th>
+      ${currentUser === "admin" ? "<th>Actions</th>" : ""}
+    </tr>`;
+  head.innerHTML = ths;
+}
+
+function clearAllRecords() {
+  if (confirm("Are you sure?")) {
+    localStorage.removeItem("students");
+    students = [];
+    renderTable();
+  }
+}
+
+function resetTeacherPassword() {
+  const users = getUsers();
+  users.teacher = { password: "abcd", subjects:["MAT","KIS"], grades:["GRADE 7","GRADE 8"] };
+  saveUsers(users);
+  alert("Teacher password reset.");
+}
+
+function gradeStudent(avg) {
+  if (avg>=80) return "A";
+  if (avg>=70) return "B";
+  if (avg>=60) return "C";
+  if (avg>=50) return "D";
+  return "E";
+}
+
+function renderTable() {
+  const tbody = document.querySelector("#markSheetTable tbody");
+  tbody.innerHTML = "";
+  const sorted = [...students].sort((a,b)=>b.total - a.total);
+  sorted.forEach((s,i)=>{
+    const tr = document.createElement("tr");
+    let subjectsToShow = currentUser === "admin" ?
+      ["MAT","KIS","SST","CRE","AGR","ENG","ISC","CAS","PTC"] :
+      getUsers()[currentUser].subjects || [];
+    tr.innerHTML=`
+      <td>${i+1}</td>
+      <td>${s.name}</td>
+      <td>${s.admNo||""}</td>
+      <td>${s.class}</td>
+      ${subjectsToShow.map(subj=>`<td>${s.marks[subj]??""}</td>`).join("")}
+      <td>${s.total}</td>
+      <td>${s.average.toFixed(2)}</td>
+      <td>${gradeStudent(s.average)}</td>
+      ${currentUser==="admin"?`
+        <td>
+          <button onclick="editStudent(${i})">Edit</button>
+          <button onclick="deleteStudent(${i})">Delete</button>
+        </td>`:""}
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function editStudent(index) {
+  const s = students[index];
+  studentName.value = s.name;
+  studentAdmNo.value = s.admNo || "";
+  studentDOB.value = s.dob || "";
+  studentGrade.value = s.class || "";
+  Object.keys(s.marks).forEach(subj => {
+    const input = document.getElementById(subj);
+    if (input) input.value = s.marks[subj];
+  });
+  students.splice(index,1);
+  saveStudents();
+  buildTableHead();
+  renderTable();
+}
+
+examForm.onsubmit = e => {
+  e.preventDefault();
+  const name = studentName.value.trim();
+  const admNo = studentAdmNo.value.trim();
+  const dob = studentDOB.value;
+  const grade = studentGrade.value;
+  const marks = {};
+  let total = 0;
+  const inputs = [...document.querySelectorAll("#subjectInputs input")];
+  if (inputs.length === 0) {
+    alert("No subjects assigned.");
+    return;
+  }
+  inputs.forEach(input => {
+    const m = +input.value || 0;
+    marks[input.id] = m;
+    total += m;
+  });
+  const average = total / inputs.length;
+  students.push({name, admNo, dob, class:grade, marks, total, average});
+  saveStudents(); buildTableHead(); renderTable(); examForm.reset();
+};
+
+registerTeacherForm.onsubmit = e=>{
+  e.preventDefault();
+  const user = newTeacherUsername.value.trim().toLowerCase();
+  const pass = newTeacherPassword.value;
+  const subjects = newTeacherSubjects.value.split(",").map(s=>s.trim().toUpperCase());
+  const grades = [...document.querySelectorAll(".gradeCheckbox:checked")].map(cb=>cb.value);
+  if (!grades.length) return alert("Select at least one grade.");
+  const users = getUsers();
+  if (users[user]) return alert("Username exists!");
+  users[user]={password:pass, subjects, grades};
+  saveUsers(users);
+  alert("Teacher registered."); registerTeacherForm.reset();
+};
+
+function deleteStudent(index) {
+  if(confirm("Delete this record?")) {
+    students.splice(index,1);
+    saveStudents();
+    renderTable();
+  }
+}
+
+function exportPDF() {
+  let subjectsToShow = currentUser==="admin"?["MAT","KIS","SST","CRE","AGR","ENG","ISC","CAS","PTC"]:getUsers()[currentUser].subjects||[];
+  const html = `
+    <h2>Mark Sheet</h2>
+    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Name</th>
+          <th>Adm No</th>
+          <th>Class</th>
+          ${subjectsToShow.map(s=>`<th>${s}</th>`).join("")}
+          <th>Total</th>
+          <th>Average</th>
+          <th>Grade</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${students.map((s,i)=>`
+          <tr>
+            <td>${i+1}</td>
+            <td>${s.name}</td>
+            <td>${s.admNo||""}</td>
+            <td>${s.class}</td>
+            ${subjectsToShow.map(subj=>`<td>${s.marks[subj]??""}</td>`).join("")}
+            <td>${s.total}</td>
+            <td>${s.average.toFixed(2)}</td>
+            <td>${gradeStudent(s.average)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>`;
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  html2pdf().from(container).set({
+    margin: 0.5,
+    filename: "mark_sheet.pdf",
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
+  }).save();
+}
+</script>
+</body>
+</html>
